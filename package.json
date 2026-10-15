@@ -52,7 +52,7 @@
     "manifestVersion": 1
   },
   "peerDependencies": {
-    "@deepseek-ai/schemastery": "^3.18.0"
+    "@deepseek-ai/schemastery": ">=3.18.3 <4"
   },
   "peerDependenciesMeta": {
     "@deepseek-ai/schemastery": {

@@ -3,3 +3,4 @@ node_modules/
 
 # 探针脚本（一次性，不属于交付物）
 probe-*.mjs
+.probe-*.mjs
