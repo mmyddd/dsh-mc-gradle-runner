@@ -47,7 +47,7 @@
 
 需要 DeepSeek Harness（desktop profile）与一个能跑的 Gradle MC 项目。
 
-打开 **设置 → 插件管理 → 安装插件**，在输入框里粘贴仓库地址：
+打开 **设置 → 插件 → 添加插件**，在「包名或地址」输入框里粘贴仓库地址：
 
 ```
 https://github.com/mmyddd/dsh-mc-gradle-runner
