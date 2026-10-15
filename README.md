@@ -47,27 +47,22 @@
 
 需要 DeepSeek Harness（desktop profile）与一个能跑的 Gradle MC 项目。
 
-```powershell
-# 1) 链接进 profile 的 node_modules
-#    别用 pnpm 的 file: 依赖——它会**拷贝**一份，之后你改插件源码不会同步，
-#    开发时会被"明明改了却没生效"坑很久（这个坑我踩过）。
-$profile = "$env:USERPROFILE\.dsh\profiles\desktop"
-$link = "$profile\node_modules\dsh-mc-gradle-runner"
-Remove-Item $link -Recurse -Force -ErrorAction SilentlyContinue
-New-Item -ItemType Junction -Path $link -Target 'C:\Git\dsh-mc-gradle-runner'
+打开 **设置 → 插件管理 → 安装插件**，在输入框里粘贴仓库地址：
 
-# 2) 告诉 profile 用这个 bundle（$profile\package.json）
-#      dependencies:        "dsh-mc-gradle-runner": "file:C:/Git/dsh-mc-gradle-runner"
-#      dsh.profile.bundles: 追加 "dsh-mc-gradle-runner"
-
-# 3) 挂载（$profile\cordis.patch.yml）
-#      - id: mc-gradle-runner
-#        name: dsh-mc-gradle-runner
+```
+https://github.com/mmyddd/dsh-mc-gradle-runner
 ```
 
-改完重开 DSH，或在插件管理里把 `mc-gradle-runner` 关掉再打开即可热重载。
+点安装即可。装好之后：
 
-> 上面第 1 步的 `-Target` 换成你的实际插件目录；第 2、3 步里的路径同理。
+- 会话头部右上角出现 run* 按钮（只在真正的 MC 项目里出现）；
+- 设置 →「插件配置」→ `dsh-mc-gradle-runner` 里出现本插件的开关。
+
+升级同样在插件管理里操作，重新拉一次这个地址就行。
+
+> 开发时想让改源码立刻生效，就把插件目录换成 junction 指到本地仓库，
+> 别用 pnpm 的 `file:` 依赖——它会**拷贝**一份，之后你改的代码不会同步，
+> 会被"明明改了却没生效"坑很久（这个坑我踩过）。
 
 ---
 
@@ -183,7 +178,7 @@ Gradle 自己报的任务清单  >  IDEA 运行配置(.run/)  >  IDEA 项目结�
 | `runData` 说"没有产物变更" | 数据生成结果真的和启动前一致。也可能产物目录不在默认四个路径里，用 `dataDirs` 指定 |
 | 崩了但没给报告 | 插件只认"新写出来的"报告——目录里堆着的历史崩溃不会被翻出来当成本次的 |
 | 任务在跑，又点了一次 | 默认拒绝并告诉你已有的任务 id，改 `duplicatePolicy` 可换行为 |
-| 改了插件源码没生效 | 用了 pnpm 的 `file:` 依赖而不是 junction。见上面安装说明 |
+| 改了插件源码没生效 | 装的是拷贝而不是 junction。见上面安装说明 |
 
 ---
 
