@@ -197,6 +197,15 @@ node test/run-all.mjs client   # 只跑名字含 "client" 的
 
 用例在 `test/`，每个文件独立进程跑，互不影响。包含几条真跑 Gradle 的端到端链路：造一个真会崩的 `runClient` 验证崩溃摘要、造一个真改文件的 `runData` 验证 diff 内容正确性、造一条父子进程链验证关闭按钮能把孙子进程也带走。
 
+`test/test-discovery.mjs`、`test-gradle-e2e.mjs`、`test-gradle-paths.mjs` 需要一个**真实的** MC 项目才跑得起来，没给路径时打印 `SKIP` 跳过（这是设计如此，不是失败）：
+
+```powershell
+node test/test-discovery.mjs C:\path\to\your\mc\project
+# 或设环境变量，三个脚本都会用
+$env:MC_TEST_PROJECT = 'C:\path\to\your\mc\project'
+node test/run-all.mjs
+```
+
 源码在 `lib/`：`index.js`（主机半身：工具 + API 路由）、`client.js`（浏览器半身：按钮 + 设置页）、`discovery.js`（项目与目标发现）、`proc.js`（进程与任务注册表）、`diff.js`（产物快照与 diff）、`crash.js`（崩溃报告识别）。
 
 ## License
