@@ -1,0 +1,65 @@
+{
+  "name": "dsh-mc-gradle-runner",
+  "version": "0.1.0",
+  "description": "DeepSeek Harness 插件：会话头部右上角提供 IntelliJ 风格的 MC Gradle runClient/runData/runServer 快捷按钮，并向模型暴露可在后台创建 run* 任务、并在 runData 完成后展示产物 diff 的工具。对任意 Gradle MC 项目可用，不绑定具体仓库。",
+  "keywords": [
+    "deepseek-harness",
+    "dsh",
+    "dsh-plugin",
+    "minecraft",
+    "gradle",
+    "runclient",
+    "rundata",
+    "forge",
+    "neoforge",
+    "fabric"
+  ],
+  "license": "MIT",
+  "type": "module",
+  "main": "lib/index.js",
+  "exports": {
+    ".": {
+      "default": "./lib/index.js"
+    },
+    "./client": {
+      "default": "./lib/client.js"
+    },
+    "./cordis.patch.yml": "./cordis.patch.yml",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "lib/index.js",
+    "lib/client.js",
+    "lib/discovery.js",
+    "lib/diff.js",
+    "lib/crash.js",
+    "lib/proc.js",
+    "cordis.patch.yml",
+    "README.md"
+  ],
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "platform": "web",
+      "inject": [
+        "@deepseek-ai/dsh-client-runtime",
+        "@deepseek-ai/dsh-client-ui-conversation",
+        "@deepseek-ai/dsh-client-ui-settings"
+      ]
+    },
+    "manifestVersion": 1
+  },
+  "peerDependencies": {
+    "@deepseek-ai/schemastery": "^3.18.0"
+  },
+  "peerDependenciesMeta": {
+    "@deepseek-ai/schemastery": {
+      "optional": true
+    }
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

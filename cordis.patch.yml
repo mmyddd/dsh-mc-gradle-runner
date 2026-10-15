@@ -1,0 +1,15 @@
+# dsh-mc-gradle-runner 的 bundle 补丁：把插件挂进 profile。
+#
+# 该 bundle 出现在 profile 的 dsh.profile.bundles 列表时生效。
+# 主机半身负责项目发现、后台任务与 4 个模型工具；浏览器半身渲染会话头部右上角的快捷按钮，
+# 并在「设置 → 插件配置」里给出表单。
+#
+# config 里的项都可以省略，省略时用插件内建默认值。
+# 这里只建议写「需要覆盖默认值」的项——其余开关都能在 DSH 的插件配置页里直接改，
+# 改完即时生效（配置字段标了 volatile，host 会原地重解析该条目）。
+
+- insert:
+    - id: mc-gradle-runner
+      name: dsh-mc-gradle-runner
+      config:
+        duplicatePolicy: reject
