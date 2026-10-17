@@ -39,6 +39,14 @@ function makeCtx() {
       },
       inject(names, callback) {
         callback({
+          // 插件现在用 ctx.inject(['tools'], …) 在服务就绪后注册工具，
+          // 桩必须把 tools 一起交出去，否则注册那一步会拿到 undefined。
+          tools: {
+            register(definition) {
+              tools.set(definition.name, definition)
+              return () => tools.delete(definition.name)
+            },
+          },
           connection: {
             fetch: {
               register(route) {

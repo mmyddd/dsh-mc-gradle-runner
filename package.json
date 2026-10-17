@@ -34,6 +34,7 @@
     "lib/diff.js",
     "lib/crash.js",
     "lib/proc.js",
+    "lib/stdin-init.gradle",
     "cordis.patch.yml",
     "README.md"
   ],

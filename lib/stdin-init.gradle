@@ -1,0 +1,30 @@
+// Gradle 初始化脚本：让 run* 任务把标准输入转发给被拉起的游戏 JVM。
+//
+// 为什么需要这个文件
+// ----------------
+// 插件用一条管道（stdin pipe）启动 `gradlew runClient`，面板与工具把
+// MC 控制台命令写进这条管道。但 Gradle 的 JavaExec **默认不转发 stdin**：
+// 实测同一段代码，不加这个脚本时把 `ping` 写进去，子进程一行都收不到；
+// 加上 `standardInput = System.in` 之后立刻收到 `GOT:ping`。
+//
+// 所以只把 `stdio` 改成 pipe 是不够的，必须让构建脚本显式把 stdin
+// 接到 JavaExec 上。插件用 `-I <本文件>` 注入，不修改用户的构建脚本。
+//
+// 生效条件
+// --------
+// 只有 `--no-daemon`（插件默认的 daemonMode）才能真正工作：长命 daemon 的
+// System.in 不是我们那条管道。daemon 模式下这里照常挂上，但命令到不了游戏，
+// 面板会明确提示，而不是假装发送成功。
+//
+// 影响范围
+// --------
+// 只对 JavaExec 生效（run* 任务都是 JavaExec 或其子类）。`configureEach` 是惰性的，
+// 不会触发额外配置；`standardInput` 已是 System.in 时重复赋值无副作用。
+
+gradle.allprojects { project ->
+    project.tasks.withType(JavaExec).configureEach { task ->
+        if (task.standardInput === null) {
+            task.standardInput = System.in
+        }
+    }
+}

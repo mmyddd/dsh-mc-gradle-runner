@@ -47,6 +47,14 @@ const ctx = {
   inject(names, callback) {
     injections.push(names.join(','))
     callback({
+      // 工具现在通过 ctx.inject(['tools']) 注册，桩要把 tools 一起交出去。
+      tools: {
+        register(definition) {
+          if (tools.has(definition.name)) throw new Error(`重复注册工具：${definition.name}`)
+          tools.set(definition.name, definition)
+          return () => tools.delete(definition.name)
+        },
+      },
       connection: {
         fetch: {
           register(route) {

@@ -55,7 +55,14 @@ const ctx = {
   tools: { register: (d) => { tools.set(d.name, d); return () => tools.delete(d.name) } },
   get(name) { return name === 'tools' ? this.tools : undefined },
   effect(fn) { const d = fn(); return () => d?.() },
-  inject(_n, cb) { cb({ connection: { fetch: { register: () => () => {} } }, effect: (fn) => { fn(); return () => {} } }) },
+  // 工具注册走 ctx.inject(['tools'])，桩要把这个服务一起交出去。
+  inject(_n, cb) {
+    cb({
+      tools: { register: (d) => { tools.set(d.name, d); return () => tools.delete(d.name) } },
+      connection: { fetch: { register: () => () => {} } },
+      effect: (fn) => { fn(); return () => {} },
+    })
+  },
   logger: { warn() {} },
   on() {},
 }

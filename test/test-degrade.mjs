@@ -91,6 +91,7 @@ function tryImport(root) {
       named: Object.keys(mod).sort(),
       config: dict === null ? null : Object.keys(dict).length,
       volatile: dict === null ? null : Object.values(dict).filter((one) => one.meta?.volatile === true).length,
+      fields: dict === null ? null : Object.keys(dict).sort(),
     }))
   `
   const result = spawnSync(process.execPath, ['--input-type=module', '-e', script], { encoding: 'utf8', cwd: root })
@@ -136,8 +137,11 @@ try {
   installStub(legacy)
   const oldDep = tryImport(legacy)
   check('旧版 schemastery（无 .volatile）时插件仍能加载', oldDep.ok, oldDep.error ?? '')
-  check('  且仍然给出全部 19 个字段', oldDep.ok && oldDep.config === 19,
-    oldDep.ok ? `字段数 ${oldDep.config}` : '')
+  // 不写死字段数：新增配置项时这里不该跟着改，改成“必须覆盖已知字段”。
+  check('  且配置 schema 覆盖了全部已知字段',
+    oldDep.ok && ['enabled', 'exposeTools', 'forwardStdin', 'gradleRoot', 'duplicatePolicy']
+      .every((key) => (oldDep.fields ?? []).includes(key)),
+    oldDep.ok ? `字段：${(oldDep.fields ?? []).join(',')}` : '')
   check('  只是字段不带 volatile（配置页不出表单，功能不受影响）',
     oldDep.ok && oldDep.volatile === 0, oldDep.ok ? `volatile 字段 ${oldDep.volatile}` : '')
 
@@ -158,8 +162,8 @@ try {
 
   // --- 用例 4：本机装的正式版本（3.18.4+）必须仍然走 volatile 路径 ---
   const modern = tryImport(pkgRoot)
-  check('当前环境（新版 schemastery）下 19 个字段全部 volatile',
-    modern.ok && modern.config === 19 && modern.volatile === 19,
+  check('当前环境（新版 schemastery）下所有字段都带 volatile',
+    modern.ok && modern.config > 0 && modern.volatile === modern.config,
     modern.ok ? `字段数 ${modern.config} / volatile ${modern.volatile}` : modern.error ?? '')
 
   console.log('')

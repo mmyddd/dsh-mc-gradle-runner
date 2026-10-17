@@ -74,7 +74,17 @@ const ctx = {
     return () => disposer?.()
   },
   inject(_names, cb) {
-    cb({ connection: { fetch: { register: () => () => {} } }, effect: (fn) => { fn(); return () => {} } })
+    // 工具注册走 ctx.inject(['tools'])，桩要把这个服务一起交出去。
+    cb({
+      tools: {
+        register(definition) {
+          tools.set(definition.name, definition)
+          return () => tools.delete(definition.name)
+        },
+      },
+      connection: { fetch: { register: () => () => {} } },
+      effect: (fn) => { fn(); return () => {} },
+    })
   },
   logger: { warn() {} },
   on() {},
