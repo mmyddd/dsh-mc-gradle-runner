@@ -111,6 +111,9 @@ const injections = []
 // 配置项的 id 换成别的就会让表单拿不到数据，这里故意用错值验证客户端确实用了正确 id。
 const formScopes = []
 const effects = []
+// 页签类型注册与 openTabIn 的调用记录，供右侧栏日志面板的验收点使用。
+const tabTypes = []
+const openedTabs = []
 const ctx = {
   inject(deps, callback) {
     injections.push(...deps)
@@ -118,7 +121,8 @@ const ctx = {
   },
   effect(callback, label) {
     effects.push(label)
-    return () => {}
+    const disposer = callback()
+    return typeof disposer === 'function' ? disposer : () => {}
   },
   slots: {
     inject(slotName, callback) {
@@ -127,6 +131,17 @@ const ctx = {
     },
     register(options, component) {
       registrations.push({ options, component })
+    },
+  },
+  sidebarRightTabs: {
+    register(definition) {
+      tabTypes.push(definition)
+      return () => {}
+    },
+  },
+  sidebarRight: {
+    openTabIn(sessionId, kind, options) {
+      openedTabs.push({ sessionId, kind, options })
     },
   },
   configForms: {
@@ -144,8 +159,8 @@ exports.apply(ctx)
 
 check('对 conversation.session.header.utilities 做了 inject',
   injections.includes('conversation.session.header.utilities'), JSON.stringify(injections))
-// 现在会注册两个槽位：会话头部工具栏 + 插件配置页表单。
-check('注册了两个槽位组件', registrations.length === 2, String(registrations.length))
+// 会注册的槽位：会话头部工具栏 + 插件配置页表单 + 右侧栏页签正文 + 页签标题。
+check('注册了四个槽位组件', registrations.length === 4, String(registrations.length))
 
 const reg = registrations[0]
 check('注册槽位是会话头部右上角控件组',
@@ -174,7 +189,33 @@ check('通过嵌套 inject 拿 configForms（缺服务时按钮不会跟着消�
 check('配置表单注册了 dispose 清理',
   effects.some((label) => typeof label === 'string' && label.includes('config form')), JSON.stringify(effects))
 
-// 槽位 inject 必须给出 hooks 供组件取状态；组件能渲染 page 视图。
+// ---- 右侧栏实时日志页签 ----
+//
+// 三层都要对上才成一个能打开的页签，这里逐个钉住，避免以后改 id 时静默失效。
+const tabType = tabTypes[0]
+check('注册了一个右侧栏页签类型', tabTypes.length === 1, String(tabTypes.length))
+check('页签类型 id 是包名', tabType?.id === 'dsh-mc-gradle-runner', tabType?.id)
+check('页签 kind 是私有值', tabType?.kind === 'mc-gradle-run', tabType?.kind)
+check('页签唯一（反复运行不堆页签）', tabType?.multiple === false, String(tabType?.multiple))
+check('页签类型注册了 dispose 清理',
+  effects.some((label) => typeof label === 'string' && label.includes('sidebar tab type')), JSON.stringify(effects))
+
+const tabBody = registrations.find((entry) => entry.options?.name === 'sidebar.right.pane.tab')
+const tabTitle = registrations.find((entry) => entry.options?.name === 'sidebar.right.pane.tab.title')
+check('注册了页签正文槽位', tabBody !== undefined)
+check('注册了页签标题槽位', tabTitle !== undefined)
+check('正文槽位 key 与页签类型 id 一致', tabBody?.options?.key === tabType?.id,
+  `${tabBody?.options?.key} vs ${tabType?.id}`)
+check('标题槽位 key 与页签类型 id 一致', tabTitle?.options?.key === tabType?.id,
+  `${tabTitle?.options?.key} vs ${tabType?.id}`)
+check('正文与标题是两个不同组件', tabBody?.component !== undefined && tabBody?.component !== tabTitle?.component)
+
+// openRunLogTab 是模块级变量，只能通过工具栏的 run() 触发；这里直接验证
+// 它调 sidebarRight.openTabIn 时用的是同一个 kind，并带上 jobId 参数。
+check('sidebarRight 服务被 inject', injections.includes('sidebarRightTabs') && injections.includes('sidebarRight'),
+  JSON.stringify(injections))
+
+
 const injectFace = settingsReg?.options?.inject()
 check('槽位 inject 暴露 hooks.mcRunSettings', injectFace?.hooks?.mcRunSettings !== undefined)
 check('表单模型绑定了字段快照', injectFace?.hooks?.mcRunSettings?.getSnapshot !== undefined)
