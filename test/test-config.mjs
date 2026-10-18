@@ -69,12 +69,12 @@ function makeCtx() {
 
 // ---- 1. 工具暴露可配置 ----
 
-// 1a. 默认：4 个工具全部暴露
+// 1a. 默认：5 个工具全部暴露
 {
   const { ctx, tools } = makeCtx()
   plugin.apply(ctx, {})
-  check('默认暴露全部 4 个工具', tools.size === 4, [...tools.keys()].join(','))
-  for (const name of ['mc_run_task', 'mc_run_output', 'mc_run_list', 'mc_run_kill']) {
+  check('默认暴露全部 5 个工具', tools.size === 5, [...tools.keys()].join(','))
+  for (const name of ['mc_run_task', 'mc_run_output', 'mc_run_list', 'mc_run_kill', 'mc_send_command']) {
     check(`  默认含 ${name}`, tools.has(name))
   }
 }
@@ -125,7 +125,7 @@ function makeCtx() {
   const { ctx, tools, routes } = makeCtx()
   plugin.apply(ctx, { showButtons: false })
   check('showButtons=false 时不挂按钮路由', routes.length === 0, String(routes.length))
-  check('showButtons=false 时工具仍注册', tools.size === 4, String(tools.size))
+  check('showButtons=false 时工具仍注册', tools.size === 5, String(tools.size))
 }
 
 // 1g. 两者都关 → 都不注册，且不抛错

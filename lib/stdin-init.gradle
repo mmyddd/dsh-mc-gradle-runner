@@ -1,4 +1,5 @@
-// Gradle 初始化脚本：让 run* 任务把标准输入转发给被拉起的游戏 JVM。
+// Gradle 初始化脚本：让 run* 任务把标准输入转发给被拉起的游戏 JVM，
+// 并给「客户端」任务挂上控制台桥 javaagent。
 //
 // 为什么需要这个文件
 // ----------------
@@ -10,10 +11,32 @@
 // 所以只把 `stdio` 改成 pipe 是不够的，必须让构建脚本显式把 stdin
 // 接到 JavaExec 上。插件用 `-I <本文件>` 注入，不修改用户的构建脚本。
 //
+// 为什么还要 javaagent
+// ------------------
+// 转发只解决「字节到得了游戏 JVM」。**Minecraft 客户端本身从不读 stdin**：
+// 1.20.1 源码全库 grep `System.in` 只有 DedicatedServer 一处真命中，
+// net/minecraft/client/** 零消费者。所以 runClient 下写进去的字节没有收件人。
+//
+// 插件因此带一个 javaagent（lib/console-bridge/mc-console-bridge.jar），
+// 由宿主通过环境变量 `DSH_MC_CONSOLE_BRIDGE` 把绝对路径传进来，
+// 本脚本把它加进客户端 JavaExec 的 jvmArgs。agent 在游戏 JVM 里起一条
+// 读 stdin 的线程，用反射把每行交给客户端主线程（/开头当命令，其余当聊天）。
+//
+// 用环境变量而不是 `-P` 传路径：Windows 上构建命令整体经过 cmd.exe，
+// 带空格的绝对路径在那一层很容易被拆成两个参数或拼进引号里；
+// 环境变量不经过 shell 解析，是唯一稳妥的通道。
+//
+// 为什么不给服务端也挂
+// ------------------
+// runServer 的 Forge 已经用 JLine/TerminalHandler 在读同一个 stdin。
+// 再加一个读者会两边抢行，命令随机丢一半。所以只在客户端任务上挂。
+//
+// 不设置这个环境变量时行为与从前完全一致：只转发 stdin，不挂 agent。
+//
 // 生效条件
 // --------
 // 只有 `--no-daemon`（插件默认的 daemonMode）才能真正工作：长命 daemon 的
-// System.in 不是我们那条管道。daemon 模式下这里照常挂上，但命令到不了游戏，
+// System.in 与环境变量都不是我们的。daemon 模式下这里照常挂上，但命令到不了游戏，
 // 面板会明确提示，而不是假装发送成功。
 //
 // 影响范围
@@ -21,10 +44,30 @@
 // 只对 JavaExec 生效（run* 任务都是 JavaExec 或其子类）。`configureEach` 是惰性的，
 // 不会触发额外配置；`standardInput` 已是 System.in 时重复赋值无副作用。
 
+def bridgePath = System.getenv('DSH_MC_CONSOLE_BRIDGE')
+if (bridgePath != null) {
+    bridgePath = bridgePath.trim()
+    if (bridgePath.isEmpty()) {
+        bridgePath = null
+    }
+}
+
+/** 任务名看起来像「客户端」——runClient / runClientXxx / *client*。 */
+def isClientTask = { String name ->
+    String lower = name.toLowerCase(Locale.ROOT)
+    lower.contains('client')
+}
+
 gradle.allprojects { project ->
     project.tasks.withType(JavaExec).configureEach { task ->
         if (task.standardInput === null) {
             task.standardInput = System.in
+        }
+        // 只有宿主明确传了 jar、且这是个客户端任务才挂 agent。
+        // 路径作为单个参数交给 JVM（Gradle 会自行处理，不要自己拼引号，
+        // 拼上的引号会成为参数的一部分，JVM 会找不到文件）。
+        if (bridgePath != null && isClientTask(task.name)) {
+            task.jvmArgs('-javaagent:' + bridgePath)
         }
     }
 }

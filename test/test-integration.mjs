@@ -88,8 +88,8 @@ await writeFile(join(root, 'src', 'generated', 'resources', 'before.json'), '{"v
 plugin.apply(ctx, { gradleRoot: root, duplicatePolicy: 'reject' })
 
 // ---- 工具注册契约 ----
-const EXPECTED = ['mc_run_task', 'mc_run_output', 'mc_run_list', 'mc_run_kill']
-check('注册了 4 个工具', tools.size === 4, [...tools.keys()].join(','))
+const EXPECTED = ['mc_run_task', 'mc_run_output', 'mc_run_list', 'mc_run_kill', 'mc_send_command']
+check('注册了 5 个工具', tools.size === 5, [...tools.keys()].join(','))
 for (const name of EXPECTED) {
   const tool = tools.get(name)
   check(`工具 ${name} 已注册`, tool !== undefined)
@@ -221,6 +221,49 @@ try {
   relativeThrew = error.message.includes('绝对路径')
 }
 check('mc_run_task 拒绝相对 project 路径', relativeThrew)
+
+// ---- mc_send_command：参数契约与拒绝路径 ----
+//
+// 这个工具是面板输入框的模型侧等价物。写入成功只代表字节进了管道，
+// 真正的送达证据是游戏日志里的 `[mc-console] ...`，所以回执单独一个字段。
+const send = tools.get('mc_send_command')
+check('mc_send_command 的 text 是必填',
+  Array.isArray(send.parameters.required) && send.parameters.required.includes('text'))
+check('mc_send_command 支持 job_id', 'job_id' in send.parameters.properties)
+check('mc_send_command 支持 wait_ms', 'wait_ms' in send.parameters.properties)
+check('mc_send_command 参数是 JSON Schema 形状', send.parameters.type === 'object')
+check('mc_send_command 的 description 说清「/ 开头是命令」', send.description.includes('/'))
+
+let emptyTextThrew = false
+try {
+  await send.execute({ text: '   ' }, exec)
+} catch (error) {
+  emptyTextThrew = error.message.includes('text')
+}
+check('mc_send_command 拒绝空 text', emptyTextThrew)
+
+// 没有在跑的可交互任务时，拒绝理由必须具体到「该怎么办」——
+// 模型会把这句话原样转述给用户，含糊的报错等于没报。
+let noJobThrew = false
+let noJobMessage = ''
+try {
+  await send.execute({ text: 'list' }, exec)
+} catch (error) {
+  noJobThrew = true
+  noJobMessage = error.message
+}
+check('mc_send_command 在没有可写任务时明确拒绝', noJobThrew, noJobMessage)
+check('  拒绝理由指出要先用 mc_run_task',
+  noJobThrew && noJobMessage.includes('mc_run_task'), noJobMessage)
+
+// 指定一个不存在的 job_id 同样要拒绝。
+let badJobThrew = false
+try {
+  await send.execute({ text: 'list', job_id: 'run-does-not-exist' }, exec)
+} catch {
+  badJobThrew = true
+}
+check('mc_send_command 对未知 job_id 报错', badJobThrew)
 
 // ---- 配置校验 ----
 let badPolicyThrew = false

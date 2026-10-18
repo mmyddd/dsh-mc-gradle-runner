@@ -84,12 +84,25 @@ https://github.com/mmyddd/dsh-mc-gradle-runner
 - **运行中自动跟随**（你手动往上滚就不抢你的滚动条）；
 - **彩色分档**：普通构建输出、失败行、Gradle 的进度噪声视觉上能分开；
 - 跑完把 `runData` 的产物 diff、`runClient` 的崩溃摘要直接贴在日志下面；
-- 底部有**命令输入框**，运行中可以直接敲 `list` / `help` 这类 Minecraft 命令。
+- 底部有**命令输入框**，`runClient` 和 `runServer` 都能用。
 
-**命令为什么能真的进游戏**：Gradle 的 `JavaExec` 默认**不转发标准输入**，游戏那一侧永远收不到。插件启动时用 `-I` 注入一份自带的初始化脚本（`lib/stdin-init.gradle`），给所有 `JavaExec` 接上 `standardInput = System.in`——不改你的构建脚本，任何 MC 项目都能用。不想要这个行为就把 `forwardStdin` 关掉，面板退化成纯日志。
+**命令怎么进游戏——分两段。** 第一段是把面板的管道接到游戏进程：Gradle 的 `JavaExec` 默认**不转发标准输入**，插件启动时用 `-I` 注入自带的初始化脚本（`lib/stdin-init.gradle`），给所有 `JavaExec` 接上 `standardInput = System.in`。不改你的构建脚本，任何 MC 项目都能用，关掉 `forwardStdin` 就退化成纯日志。
+
+第二段才是关键：**光转发没用，客户端根本不读 stdin**。Minecraft 1.20.1 源码里全库只有 `DedicatedServer` 一处读 `System.in`（服务端控制台线程，Forge 再套一层 JLine 的 `TerminalHandler`）；`net/minecraft/client/**` 下**没有任何一处**读 stdin——字节到了游戏 JVM 也会原地消失。所以插件在 `runClient` 上再挂一个 `-javaagent`（`lib/console-bridge/`），由它在游戏 JVM 里补上缺失的读线程：
+
+- 以 `/` 开头 → `ClientPacketListener.sendCommand`（如 `/time set day`）
+- 其余 → `sendChat`（发一条聊天消息）
+- 全程只用反射、不 import 任何 Minecraft 类，因此不绑定 MC 版本与映射（Mojmap / SRG 名字都认）；类从 `Instrumentation.getAllLoadedClasses()` 里找，能跨 NeoForge 的转换类加载器
+- 游戏还没启动完就敲了命令不会丢——桥会等客户端实例，先排队的命令随后执行
+
+执行回执打在日志里，形如 `[mc-console] 已交给客户端：time set day` / `[mc-console] 尚未进入世界，命令无处执行`。看到回执才代表真的进了游戏。
 
 > 这条链路依赖 `--no-daemon`：长命 daemon 的 `System.in` 不是我们这条管道。
 > 所以把 `daemonMode` 改成 `daemon` 之后，命令输入框基本就没用了。
+
+**服务端不挂桥**：`runServer` 本来就有 JLine 在读同一个 stdin，再挂一个读者只会两边抢行、命令随机丢一半。
+
+**桥的 jar 是随插件发布的**（`lib/console-bridge/mc-console-bridge.jar`，约 6 KB）。万一你的安装里缺了它，输入框会被明确禁用并提示怎么补，而不是敲完回车弹一句"已发送"、实际什么都没发生。自己编译：`node lib/console-bridge/build.mjs`（需要 JDK 17+，会自动找 `JAVA_HOME` 或 PATH 里的 `javac`）。
 
 ### 让模型来：`mc_run_*` 工具
 
@@ -99,7 +112,7 @@ https://github.com/mmyddd/dsh-mc-gradle-runner
 
 模型会调 `mc_run_task { kind: "data" }`，后台跑，跑完自动拿到 diff——**而且它看到的就是你能看到的那张 diff 卡片**。
 
-四个工具：
+五个工具：
 
 | 工具 | 用途 |
 | --- | --- |
@@ -107,6 +120,11 @@ https://github.com/mmyddd/dsh-mc-gradle-runner
 | `mc_run_output` | 读输出。`wait: true` 就阻塞等它跑完 |
 | `mc_run_list` | 现在有哪些任务在跑 |
 | `mc_run_kill` | 停掉 |
+| `mc_send_command` | 往正在跑的游戏里发一行：`/` 开头按命令执行（如 `/time set day`），其余按聊天发送 |
+
+`mc_send_command` 是日志面板底部那个输入框的模型侧等价物，所以它同样只对 `runClient` / `runServer` 成立。它写完会短暂等一等游戏侧的回执并一起返回；没等到回执时它只会说"还没确认"，不会替你断言命令生效了——原因见上面那段"命令怎么进游戏"。
+
+**工作区确实是可运行的 MC 项目时**（判定与"是否显示按钮"完全同一套：有 Gradle 构建脚本且发现了 `run*` 任务），插件还会往系统提示词里加一小段，告诉模型这几个工具怎么配合、以及"发送成功 ≠ 执行成功"。工作区不对时那段话不会出现，模型也就不会去调注定失败的工具。
 
 任务全程在后台，**不阻塞前台**——你在它跑的时候还能继续聊。
 
@@ -181,7 +199,7 @@ Gradle 自己报的任务清单  >  IDEA 运行配置(.run/)  >  IDEA 项目结�
 | `taskQueryCacheMs` | `300000` | 任务清单缓存时长 |
 | `taskQueryTimeoutMs` | `180000` | 任务清单查询超时 |
 | `gitBin` | `git` | git 可执行文件 |
-| `forwardStdin` | `true` | 用 `-I` 注入脚本把 stdin 转发给游戏 JVM；关掉则控制台命令到不了游戏 |
+| `forwardStdin` | `true` | 用 `-I` 注入脚本把 stdin 转发给游戏 JVM；关掉则控制台命令到不了游戏（输入框会明确禁用并说明是这个开关） |
 | `buttonOrder` | `-100` | 按钮排序，越小越靠左 |
 
 </details>
@@ -223,7 +241,7 @@ $env:MC_TEST_PROJECT = 'C:\path\to\your\mc\project'
 node test/run-all.mjs
 ```
 
-源码在 `lib/`：`index.js`（主机半身：工具 + API 路由）、`client.js`（浏览器半身：工具栏 + 日志页签 + 设置页）、`discovery.js`（项目与目标发现）、`proc.js`（进程与任务注册表）、`diff.js`（产物快照与 diff）、`crash.js`（崩溃报告识别）、`stdin-init.gradle`（注入给 JavaExec 的 stdin 转发脚本）。
+源码在 `lib/`：`index.js`（主机半身：工具 + API 路由）、`client.js`（浏览器半身：工具栏 + 日志页签 + 设置页）、`discovery.js`（项目与目标发现）、`proc.js`（进程与任务注册表）、`diff.js`（产物快照与 diff）、`crash.js`（崩溃报告识别）、`bridge.js`（控制台桥的定位与"这个任务能不能发命令"的判定）、`command.js`（发送命令：选哪个任务写、回执归谁）、`guidance.js`（提示词里那段 MC 工具说明的文案）、`prompt.js`（把那段说明挂进系统提示词，带按 cwd 的短缓存）、`stdin-init.gradle`（注入给 JavaExec 的 stdin 转发 + javaagent 挂载脚本）、`console-bridge/`（游戏 JVM 里的读 stdin 代理：`ConsoleBridge.java` 源码、`build.mjs` 编译脚本、随包发布的 `mc-console-bridge.jar`）。
 
 ## License
 
