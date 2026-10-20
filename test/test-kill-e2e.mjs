@@ -114,20 +114,36 @@ while (Date.now() < deadline) {
 check('游戏进程已被 Gradle 拉起', Number.isFinite(gamePid) && alive(gamePid), `pid=${gamePid}`)
 
 const jobId = started.job.id
-const wrapperPid = Number((started.text.match(/已在后台启动 (\S+)/) ?? [])[1] ? undefined : undefined)
 
 // 走按钮/工具的取消路径。
 console.log('')
 console.log(`调用 mc_run_kill { job_id: "${jobId}" }（按钮走同一条路径）…`)
+const killRequestedAt = Date.now()
 const killed = await tools.get('mc_run_kill').execute({ job_id: jobId, reason: '用户点了关闭' }, exec)
 console.log(`  ${killed.text}`)
 console.log('')
 
-// 等超过 KILL_GRACE_MS(5s)，让强制升级执行完。
-await new Promise((r) => setTimeout(r, 16000))
+/**
+ * 轮询到游戏进程真正消失，并记下从「请求取消」到消失的耗时。
+ *
+ * 这里量的是「用户点完停止要干等多久」，所以必须量到真实时刻：用一个宽裕的
+ * 固定 sleep 会把「慢了 5 秒」也判成 PASS，正是本次要修的那个体验。
+ * Windows 上停止是直接强杀整棵树（`taskkill` 不带 /F 对 java.exe 不构成温和终止，
+ * 那段宽限期纯属空转），所以预算收紧到 2.5 秒；POSIX 仍走 SIGTERM → 5s 宽限 → SIGKILL。
+ */
+const budgetMs = process.platform === 'win32' ? 2500 : 12000
+let gameAlive = alive(gamePid)
+while (gameAlive && Date.now() - killRequestedAt < budgetMs) {
+  await new Promise((r) => setTimeout(r, 100))
+  gameAlive = alive(gamePid)
+}
+const killedInMs = Date.now() - killRequestedAt
 
-const gameAlive = alive(gamePid)
-check('游戏进程已被强制关闭（用户报的核心问题）', gameAlive === false, `pid=${gamePid} alive=${gameAlive}`)
+check(
+  '点停止后游戏进程立刻被关闭（不再等宽限期）',
+  gameAlive === false,
+  `pid=${gamePid} alive=${gameAlive} 耗时=${killedInMs}ms 预算=${budgetMs}ms`,
+)
 
 const list = await tools.get('mc_run_list').execute({}, exec)
 const job = list.find((j) => j.id === jobId)
