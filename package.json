@@ -41,6 +41,7 @@
     "lib/stdin-init.gradle",
     "lib/console-bridge/mc-console-bridge.jar",
     "lib/console-bridge/ConsoleBridge.java",
+    "lib/console-bridge/MANIFEST.MF",
     "lib/console-bridge/build.mjs",
     "cordis.patch.yml",
     "README.md"
