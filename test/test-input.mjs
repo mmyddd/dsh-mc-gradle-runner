@@ -163,6 +163,43 @@ check("placeholder 在不可输入时显示原因",
 check("发送按钮同样绑定 canInput",
 	clientSource.includes("disabled: !canInput || input.trim().length === 0"));
 
+// ---- 模型起的任务对 UI 可见性 ----
+//
+// 用户报过：模型通过 mc_run_task 起了 runClient，游戏窗口都起来了，
+// 但右上角工具栏什么都不显示、日志面板里也找不到这个任务。
+// 根因是 status 走 registry.list(undefined)，它按归属过滤，只返回无主任务；
+// 而工具起的任务带 owner（agent id），浏览器只有 sessionId，对不上号。
+const viewRegistry = new RunRegistry({ outputLimitBytes: 1 << 20, duplicatePolicy: "allow" });
+try {
+	const modelJob = viewRegistry.start({
+		task: "runClient", label: "model", owner: "agent-1", origin: "model",
+		cwd: process.cwd(), argv: [process.execPath, "--input-type=module", "-e", CHILD],
+	}).job;
+	const userJob = viewRegistry.start({
+		task: "runData", label: "user", owner: undefined,
+		cwd: process.cwd(), argv: [process.execPath, "--input-type=module", "-e", CHILD],
+	}).job;
+	check("按归属过滤时看不到模型起的任务（旧行为，这正是 bug 的来源）",
+		viewRegistry.list(undefined).every((job) => job.id !== modelJob.id));
+	check("listAll 能看到全部任务（工具栏与日志面板据此工作）",
+		viewRegistry.listAll().length === 2);
+	check("任务带上来源标记，面板才能标「由 AI 启动」",
+		viewRegistry.listAll().find((job) => job.id === modelJob.id)?.origin === "model"
+		&& viewRegistry.listAll().find((job) => job.id === userJob.id)?.origin === "user");
+	check("来源标记不进 owner，不改变归属隔离",
+		viewRegistry.list(undefined).length === 1 && viewRegistry.list(undefined)[0].id === userJob.id);
+} finally {
+	viewRegistry.dispose();
+}
+
+check("主机 status 用 listAll 而不是按归属过滤",
+	/action === 'status'[\s\S]{0,400}registry\.listAll\(\)/.test(hostSource));
+check("工具起的任务显式标记 origin=model",
+	hostSource.includes("origin: 'model'") && hostSource.includes("origin: options.origin ?? 'user'"));
+check("工具栏读 origin 标记 AI 任务", clientSource.includes('statusFromModel'));
+check("工具栏状态行同时是日志入口",
+	clientSource.includes('openRunLogTab(sessionId, { jobId: current.id, task: current.task })'));
+
 if (failures > 0) {
 	console.error(`\n${failures} 个测试失败`);
 	process.exit(1);
