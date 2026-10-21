@@ -198,7 +198,8 @@ Gradle 自己报的任务清单  >  IDEA 运行配置(.run/)  >  IDEA 项目结�
 | `diffHunkLines` | `40` | 每个文件展示多少行改动 |
 | `diffMaxBytes` | `524288` | 单文件参与 diff 的字节上限 |
 | `snapshotTextBudgetBytes` | `67108864` | 快照保留旧内容的累计上限（64 MB） |
-| `outputLimitBytes` | `4194304` | 单任务内存输出上限 |
+| `outputLimitBytes` | `4194304` | 单任务内存输出上限（字节，主机侧） |
+| `logTailLines` | `500` | 右侧栏日志只显示最后 N 行，多余丢弃；调大更完整但更吃内存 |
 | `dataTimeoutMs` | `120000` | runData 后收集 diff 的等待上限 |
 | `taskQueryCacheMs` | `300000` | 任务清单缓存时长 |
 | `taskQueryTimeoutMs` | `180000` | 任务清单查询超时 |

@@ -174,6 +174,21 @@ const badAction = await routes[0].fetch(
 )
 check('未知 action 返回 400', badAction.status === 400, String(badAction.status))
 
+// ---- log 端点：面板每秒轮询它，必须被行数上限截住 ----
+// 端点的行为（只回最后 logTailLines 行）在 test-core.mjs 用 tailLines/readTail
+// 做了行为级验证；这里只确认路由这一层接上了、参数校验在位。
+const logNoId = await routes[0].fetch(
+  new Request('http://localhost/api/mc-gradle-runner', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ action: 'log' }),
+  }),
+)
+check('log 端点缺 job_id 时返回 400', logNoId.status === 400, String(logNoId.status))
+const logBody = await logNoId.json()
+check('log 端点的 400 说明缺哪个字段',
+  typeof logBody.error === 'string' && logBody.error.includes('job_id'), logBody.error)
+
 // ---- 工具：mc_run_list 在空状态下要能正常回答 ----
 const listResult = await tools.get('mc_run_list').execute({}, exec)
 check('mc_run_list 空状态返回空数组', Array.isArray(listResult) && listResult.length === 0, JSON.stringify(listResult))

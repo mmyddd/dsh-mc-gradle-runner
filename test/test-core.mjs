@@ -3,7 +3,7 @@ import { mkdtemp, writeFile, mkdir, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { createSnapshot, collectDiff, renderDiffSummary, collectGitDiff } from '../lib/diff.js'
-import { RunRegistry, runOnce } from '../lib/proc.js'
+import { RunRegistry, runOnce, tailLines } from '../lib/proc.js'
 
 let failures = 0
 function check(label, condition, extra) {
@@ -196,6 +196,43 @@ try {
   foreignBlocked = true
 }
 check('其他会话取不到该任务', foreignBlocked)
+
+// ---- 13. 尾部按行截断（日志面板的显示上限） ----
+// 面板每秒轮询，不能拿完整缓冲；tailLines 是这道闸门。
+const many = Array.from({ length: 900 }, (_, i) => `line-${i}`).join('\n')
+const tail = tailLines(many, 500)
+const tailTexts = tail.text.split('\n')
+check('tailLines 只保留最后 N 行', tailTexts.length === 500, String(tailTexts.length))
+check('tailLines 保留的是尾部（末行是最新的）', tailTexts[tailTexts.length - 1] === 'line-899',
+  tailTexts[tailTexts.length - 1])
+check('tailLines 从最早保留行开始', tailTexts[0] === 'line-400', tailTexts[0])
+check('tailLines 报告丢掉的行数', tail.dropped === 400, String(tail.dropped))
+// 不足上限时一个字都不该动，dropped 必须是 0（否则面板会误报「有行没显示」）。
+const small = tailLines('a\nb\nc', 500)
+check('行数不足时不截断', small.text === 'a\nb\nc' && small.dropped === 0, JSON.stringify(small))
+// 非正数表示不截断——配置被写成 0 或负数时不能把日志变成空。
+check('maxLines<=0 时不截断', tailLines(many, 0).text === many && tailLines(many, -1).dropped === 0)
+
+// readTail 与 readAll 走同一个缓冲，只是前者按行截断且两者都不移动游标。
+const tailReg = new RunRegistry({})
+const tailJob = tailReg.start({
+  task: ':t:runData', label: 't', cwd: root,
+  argv: process.platform === 'win32'
+    ? ['cmd.exe', '/d', '/s', '/c', 'for /l %i in (1,1,600) do @echo row-%i']
+    : ['sh', '-c', 'i=1; while [ $i -le 600 ]; do echo row-$i; i=$((i+1)); done'],
+})
+await tailReg.wait(tailJob.job.id, 20000)
+const tailAll = tailReg.readAll(tailJob.job.id)
+const tailView = tailReg.readTail(tailJob.job.id, undefined, 100)
+check('readTail 保留 100 行', tailView.text.split('\n').length === 100,
+  String(tailView.text.split('\n').length))
+check('readTail 丢掉的行数与总量吻合', tailView.dropped === tailAll.text.split('\n').length - 100,
+  `${tailView.dropped} vs ${tailAll.text.split('\n').length}`)
+check('readTail 末行是最新输出', tailView.text.trimEnd().endsWith('row-600'),
+  JSON.stringify(tailView.text.trimEnd().slice(-30)))
+check('readTail 不移动游标（readAll 长度不变）',
+  tailReg.readAll(tailJob.job.id).text.length === tailAll.text.length)
+tailReg.dispose()
 
 // 清理
 registry.dispose(); reuseReg.dispose(); allowReg.dispose(); echoReg.dispose()

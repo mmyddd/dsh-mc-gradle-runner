@@ -234,7 +234,7 @@ if (typeof settingsCard === 'function') {
 }
 
 // 源码层面确认配置卡覆盖了各开关，且文案是中文。
-for (const field of ['enabled', 'showButtons', 'exposeTools', 'allowGradleTaskQuery', 'daemonMode', 'duplicatePolicy', 'gradleRoot']) {
+for (const field of ['enabled', 'showButtons', 'exposeTools', 'allowGradleTaskQuery', 'daemonMode', 'duplicatePolicy', 'gradleRoot', 'logTailLines']) {
   check(`配置卡包含字段 ${field}`, source.includes(`"${field}"`))
 }
 check('配置卡用了官方表单部件', source.includes('SettingsFormModel') && source.includes('SettingsForm'))
@@ -304,6 +304,13 @@ check('describeProvenance 提醒 wrapper 缺失',
   provenanceFn({ sources: { idea: 2 }, hasWrapper: false }).includes('无 gradlew'),
   provenanceFn({ sources: { idea: 2 }, hasWrapper: false }))
 check('describeProvenance 空来源安全', provenanceFn({ sources: {} }) === '无', provenanceFn({ sources: {} }))
+
+// ---- 日志面板：只显示尾部 N 行 ----
+// 端点是主机侧的截断点（见 test-core.mjs 的 tailLines 用例），
+// 这里确认前端确实用了 droppedLines 并把「有行没显示」说出来。
+check('面板接收 droppedLines', source.includes('droppedLines'))
+check('面板在行数截断时提示已丢弃的行数', /只显示最后 \$\{lines\.length\} 行/.test(source))
+check('面板的日志动作请求走 log 端点', source.includes('action: "log"'))
 
 console.log('')
 console.log(failures === 0 ? 'ALL CLIENT TESTS PASSED' : `${failures} CLIENT TEST(S) FAILED`)
